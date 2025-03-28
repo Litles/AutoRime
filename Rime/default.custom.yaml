@@ -4,5 +4,5 @@ patch:
     - "Control+Shift+grave"
     - "F4"
   schema_list:
-    #- {schema: myschema}
+    - {schema: yujoy_fluid}
     - {schema: pinyin_simp}
