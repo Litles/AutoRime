@@ -1,0 +1,7 @@
+patch:
+  "switcher/hotkeys":
+    - "Control+grave"
+    - "Control+Shift+grave"
+    - "F4"
+schema_list:
+    - {schema: pinyin_simp}
