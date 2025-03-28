@@ -12,12 +12,12 @@ auto_rime/*
 !auto_rime/articles/002_爱怕什么（毕淑敏）.txt
 !auto_rime/articles/003_秋天的怀念（史铁生）.txt
 !auto_rime/articles/004_增广贤文.txt
-!auto_rime/mapping_table.txt
+#!auto_rime/mapping_table.txt
 Rime/*
 !Rime/opencc/
 !Rime/essay.txt
 !Rime/default.yaml
-!Rime/default.custom.yaml
+#!Rime/default.custom.yaml
 !Rime/key_bindings.yaml
 !Rime/pinyin_simp.dict.yaml
 !Rime/pinyin_simp.schema.yaml
