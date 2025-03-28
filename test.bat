@@ -1,4 +1,5 @@
 @echo off
+chcp 65001
 setlocal EnableDelayedExpansion
 
 echo Entering librime console ...

@@ -27,6 +27,7 @@ Rime/*
 _*.*
 *.sublime-workspace
 *.sublime-project
-backup/
+*.spec
 build/
 dist/
+backup/

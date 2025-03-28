@@ -7,14 +7,15 @@
 
 import os
 import sys
+import traceback
 import re
 from time import sleep, perf_counter
 
 class AutoRime:
     def __init__(self):
-        # 0.识别当前绝对路径
+        # 0.识别程序根目录(当前 py 或打包后 exe 所在的目录)的绝对路径
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-            self.dir_bundle = sys._MEIPASS
+            self.dir_bundle = os.path.split(sys._MEIPASS)[0]
         else:
             self.dir_bundle = os.getcwd()
 
@@ -60,6 +61,7 @@ class AutoRime:
         if os.path.exists(self.file_stats):
             os.remove(self.file_stats)
         # 部署 Rime
+        # && chcp 65001
         os.system(f'''cd "{self.dir_schema}" && "{self.file_exe_deployer}" --build''')
 
 
@@ -125,7 +127,7 @@ class AutoRime:
             with open(file_stdin, 'a', encoding='utf-8') as fa:
                 fa.write("\nexit\n")
         # && chcp 65001
-        os.system(f'''cd "{self.dir_schema}" && "{self.file_exe_console}" < "{file_stdin}" 2> nul | find "commit:" >> "{file_stdout}"''')
+        os.system(f'''cd "{self.dir_schema}" && chcp 65001 && "{self.file_exe_console}" < "{file_stdin}" 2> nul | find "commit:" >> "{file_stdout}"''')
         # 收集输出的乱码行
         set_n = set()
         with open(file_stdout, 'r', encoding='utf-8') as fr:
@@ -278,6 +280,12 @@ def main():
     ar.output_result(stats_all)
 
 if __name__ == '__main__':
-    start = perf_counter()
-    main()
-    print("\nRuntime:", perf_counter() - start)
+    try:
+        start = perf_counter()
+        main()
+        print("\nRuntime:", perf_counter() - start)
+    except:
+        print(traceback.format_exc())
+        print("ERROR: 由于上述原因, 程序已中止运行")
+    print('\n\n------------------------------------')
+    input("回车退出程序:")
