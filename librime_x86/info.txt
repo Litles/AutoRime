@@ -1,0 +1,4 @@
+librime_x86/bin 文件夹来源：
+
+* rime_api_console.exe：提取自 rime-windows.zip（librime release 1.3.2）
+* 其余：提取自 rime-1c23358-Windows-msvc-x86.7z、rime-deps-1c23358-Windows-msvc-x86.7z（librime 1.13.1）
