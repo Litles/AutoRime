@@ -1,2 +1,2 @@
 # AutoRime
-Rime 跟打模拟和数据统计
+Rime 打字模拟和数据统计
