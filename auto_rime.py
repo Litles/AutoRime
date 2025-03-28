@@ -185,6 +185,7 @@ class AutoRime:
                             cnt_char_correct += len(line_in)
                         else:
                             line_out = dict_sup[line_in]
+                            text_unmatched += f"{line_in}\t{line_out}\n"
                             for j in range(len(line_in)):
                                 try:
                                     if line_in[j] == line_out[j]:
