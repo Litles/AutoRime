@@ -3,7 +3,7 @@
 # @Date    : 2025-03-27 12:42:11
 # @Author  : Litles (litlesme@gmail.com)
 # @Link    : https://github.com/Litles
-# @Version : 1.0
+# @Version : 1.1
 
 import os
 import sys
@@ -30,6 +30,7 @@ class AutoRime:
         self.dir_articles = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'articles')
         self.fname_sup = 'sup.txt'
         # a) 处理好的文章
+        self.dir_articles_pre = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'articles_pre')
         self.dir_articles_ready = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'articles_ready')
         self.file_ready_sup = os.path.join(self.dir_articles_ready, self.fname_sup)
         # b) Rime 的输入
@@ -47,20 +48,24 @@ class AutoRime:
         self.set_chars.add("〇")  # 该字被收录到符号区，但应作为汉字使用，故加之
         self.file_mapping = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'mapping_table.txt')
         self.dict_char_code = {}
+        self.set_chars_user = set()
         # 统计结果
         self.file_stats = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'statistics.txt')
 
         # 3.初始化：创建/清空相关文件夹
         if len([f for f in os.listdir(self.dir_articles) if f.endswith(".txt")]) == 0:
             raise BaseException("articles 文件夹中未找到 txt 文本文件")
-        for d in [self.dir_articles_ready, self.dir_in, self.dir_out, self.dir_unmatched]:
+        for d in [self.dir_articles_pre, self.dir_articles_ready, self.dir_in, self.dir_out, self.dir_unmatched]:
             if not os.path.exists(d):
                 os.makedirs(d)
             for fname in os.listdir(d):
                 os.remove(os.path.join(d, fname))
         if os.path.exists(self.file_stats):
             os.remove(self.file_stats)
-        # 部署 Rime
+        # 读取映射表
+        self.read_mapping_table()
+        # 创建 cmd 进程，部署 Rime
+        # self.subprocess_cmd = os.popen("chcp 65001")
         # && chcp 65001
         os.system(f'''cd "{self.dir_schema}" && "{self.file_exe_deployer}" --build''')
 
@@ -73,27 +78,7 @@ class AutoRime:
                 # str_charset += fr.read().replace("\r", "").replace("\n", "")
         return set(str_charset)
 
-    def process_article(self, fname):
-        file_in = os.path.join(self.dir_articles, fname)
-        file_out = os.path.join(self.dir_articles_ready, fname)
-        text_buffer = ""
-        # punc_pat = re.compile(r"[，。《〈«‹》〉»›？；：‘’“”、～！……·（）－—「【〔［」】〕］『〖｛』〗｝]")
-        # punc_pat_en = re.compile(r"[,\-+:;/0123456789'\. ]")
-        with open(file_in, 'r', encoding='utf-8') as fr:
-            inline_flag = False
-            for char in fr.read():
-                if char in self.set_chars:
-                    text_buffer += char
-                    inline_flag = True
-                else:
-                    if inline_flag:
-                        text_buffer += "\n"
-                        inline_flag = False
-                    continue
-        with open(file_out, 'w', encoding='utf-8') as fw:
-            fw.write(text_buffer)
-
-    def generate_stdin_file(self, fname):
+    def read_mapping_table(self):
         # 读取单字码表(映射表)
         with open(self.file_mapping, 'r', encoding='utf-8') as fr:
             for line in fr:
@@ -101,6 +86,48 @@ class AutoRime:
                 if line:
                     char, code = line.split('\t')
                     self.dict_char_code[char] = code
+                    self.set_chars_user.add(char)
+
+    def process_article(self, fname):
+        file_in = os.path.join(self.dir_articles, fname)
+        file_pre = os.path.join(self.dir_articles_pre, fname)
+        file_out = os.path.join(self.dir_articles_ready, fname)
+        pre_buffer = "" # for file_pre
+        line_buffer = "" # for file_out
+        out_buffer = "" # for file_out
+        # punc_pat = re.compile(r"[，。《〈«‹》〉»›？；：‘’“”、～！……·（）－—「【〔［」】〕］『〖｛』〗｝]")
+        # punc_pat_en = re.compile(r"[,\-+:;/0123456789'\. ]")
+        with open(file_in, 'r', encoding='utf-8') as fr:
+            inline_flag = False
+            line_out_flag = True # for file_out
+            for char in fr.read():
+                if char in self.set_chars:
+                    pre_buffer += char
+                    inline_flag = True
+                    # for file_out
+                    line_buffer += char
+                    if char not in self.set_chars_user:
+                        line_out_flag = False
+                else:
+                    if inline_flag:
+                        pre_buffer += "\n"
+                        inline_flag = False
+                        # for file_out
+                        if line_out_flag:
+                            out_buffer += (line_buffer+"\n")
+                        line_out_flag = True
+                        line_buffer = ""
+                    continue
+        with open(file_pre, 'w', encoding='utf-8') as fw:
+            fw.write(pre_buffer)
+            if not pre_buffer.endswith("\n"):
+                fw.write("\n")
+        with open(file_out, 'w', encoding='utf-8') as fw:
+            fw.write(out_buffer)
+            if not out_buffer.endswith("\n"):
+                fw.write("\n")
+
+    def generate_stdin_file(self, fname):
         # 生成短句编码
         file_in = os.path.join(self.dir_articles_ready, fname)
         file_out = os.path.join(self.dir_in, fname)
@@ -122,13 +149,26 @@ class AutoRime:
         file_stdout = os.path.join(self.dir_out, fname)
         if os.path.exists(file_stdout):
             os.remove(file_stdout)
-        # (sup) 补充退出命令
+        # 0.预处理
         if is_final:
+            # (sup) 补充退出命令
             with open(file_stdin, 'a', encoding='utf-8') as fa:
                 fa.write("\nexit\n")
+            print("正在模拟跟打：", self.fname_sup+" [程序自动生成]")
+        else:
+            print("正在模拟跟打：", fname)
+        # 1.开始模拟
         # && chcp 65001
-        os.system(f'''cd "{self.dir_schema}" && chcp 65001 && "{self.file_exe_console}" < "{file_stdin}" 2> nul | find "commit:" >> "{file_stdout}"''')
-        # 收集输出的乱码行
+        cmd_command = f'''cd "{self.dir_schema}" && chcp 65001 && "{self.file_exe_console}" < "{file_stdin}" 2> nul | find "commit:" >> "{file_stdout}"'''
+        # os.system(cmd_command)
+        cmd_stdout = os.popen(cmd_command)
+        for line in cmd_stdout:
+            if ("code page" not in line) and ("活动代码页" not in line):
+                print(line.rstrip())
+        if cmd_stdout.close() is not None:
+            raise BaseException("模拟出现异常")
+        # 2.收集输出的乱码行
+        # print("正在收集乱码行", fname)
         set_n = set()
         with open(file_stdout, 'r', encoding='utf-8') as fr:
             n = 0
@@ -154,6 +194,7 @@ class AutoRime:
                         n += 1
                         if n in set_n:
                             fa.write(line)
+        # print("模拟完成：", fname)
 
     def get_statistics(self, fname, dict_sup):
         file_in = os.path.join(self.dir_articles_ready, fname)
@@ -253,7 +294,6 @@ def main():
     # for fname in list_fname:
     for fname in os.listdir(ar.dir_articles):
         if fname.endswith(".txt") and fname != ar.fname_sup:
-            print("正在模拟跟打：", fname)
             ar.process_article(fname)
             ar.generate_stdin_file(fname)
             # sleep(1)

@@ -7,7 +7,7 @@ librime_x86/bin/*
 !librime_x86/bin/rime_api_console.exe
 auto_rime/*
 !auto_rime/charsets/
-!auto_rime/articles/
+auto_rime/articles/*
 !auto_rime/articles/001_春（朱自清）.txt
 !auto_rime/articles/002_爱怕什么（毕淑敏）.txt
 !auto_rime/articles/003_秋天的怀念（史铁生）.txt
@@ -31,3 +31,4 @@ _*.*
 build/
 dist/
 backup/
+test.py
