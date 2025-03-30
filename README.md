@@ -14,8 +14,7 @@ Rime 打字模拟和数据统计
 
 （**重要**）形码类方案的模拟需要提供`mapping_table.txt`文件，该文件的格式类似于单字码表，规定了模拟跟打程序碰到相应的字时，应该对应输入什么编码，因此要求一字一个唯一码（不能一字多码），示例格式如下：
 
-![img](https://github.com/Litles/AutoRime/blob/main/images/mapping_table_01.png)
-![img](https://github.com/Litles/AutoRime/blob/main/images/mapping_table_02.png) 
+<img src="https://github.com/Litles/AutoRime/blob/main/images/mapping_table_01.png" width="250"/> <img src="https://github.com/Litles/AutoRime/blob/main/images/mapping_table_02.png" width="250"/>
 
 ## 关于音码类方案的模拟
 
