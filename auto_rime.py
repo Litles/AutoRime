@@ -8,11 +8,14 @@
 import os
 import sys
 import traceback
-import re
 from time import sleep, perf_counter
+from func_lib import get_charset, generate_mapping_table_pingyin
 
 class AutoRime:
-    def __init__(self):
+    def __init__(self, pingyin_flg: bool=False, len_min: int=1, len_code: int=0):
+        self.pingyin_flg = pingyin_flg
+        self.len_min = len_min
+        self.len_code = len_code
         # 0.识别程序根目录(当前 py 或打包后 exe 所在的目录)的绝对路径
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
             self.dir_bundle = os.path.split(sys._MEIPASS)[0]
@@ -44,13 +47,20 @@ class AutoRime:
         # 字符集和单字码表
         file_cs1 = os.path.join(os.path.join(self.dir_charsets, 'G标'), 'GB18030汉字集_无兼容汉字.txt')
         file_cs2 = os.path.join(os.path.join(self.dir_charsets, 'G标_通规'), '通规（8105字）.txt')
-        self.set_chars = self.get_charset(file_cs1, file_cs2)
+        self.set_chars = get_charset(file_cs1, file_cs2)
         self.set_chars.add("〇")  # 该字被收录到符号区，但应作为汉字使用，故加之
         self.file_mapping = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'mapping_table.txt')
         self.dict_char_code = {}
         self.set_chars_user = set()
         # 统计结果
         self.file_stats = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'statistics.txt')
+        # pingyin only
+        self.dir_dict_yamls = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'dict_yamls')
+        self.file_mapping_sup = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'mapping_table_sup.txt')
+        self.dict_char_code_duoyin = {} # for pingyin
+        self.dict_char_words_duoyin = {} # for pingyin
+        self.list_matched_duoyin = []
+        self.file_matched_duoyin = os.path.join(os.path.join(self.dir_bundle, 'auto_rime'), 'matched_duoyin.txt')
 
         # 3.初始化：创建/清空相关文件夹
         if len([f for f in os.listdir(self.dir_articles) if f.endswith(".txt")]) == 0:
@@ -62,21 +72,18 @@ class AutoRime:
                 os.remove(os.path.join(d, fname))
         if os.path.exists(self.file_stats):
             os.remove(self.file_stats)
+        if os.path.exists(self.file_matched_duoyin):
+            os.remove(self.file_matched_duoyin)
+        if os.path.exists(self.file_mapping_sup):
+            os.remove(self.file_mapping_sup)
         # 读取映射表
-        self.read_mapping_table()
-        # 创建 cmd 进程，部署 Rime
-        # self.subprocess_cmd = os.popen("chcp 65001")
-        # && chcp 65001
-        os.system(f'''cd "{self.dir_schema}" && "{self.file_exe_deployer}" --build''')
-
-
-    def get_charset(self, *files: str) -> set[str]:
-        str_charset = ""
-        for file in files:
-            with open(file, 'r', encoding='utf-8') as fr:
-                str_charset += re.sub(r"\s", "", fr.read())
-                # str_charset += fr.read().replace("\r", "").replace("\n", "")
-        return set(str_charset)
+        if not self.pingyin_flg:
+            self.read_mapping_table()
+        else:
+            generate_mapping_table_pingyin(self.dir_dict_yamls, self.file_mapping, self.file_mapping_sup, self.len_code)
+            self.read_mapping_table_pingyin()
+        # 部署 Rime
+        os.system(f'''cd "{self.dir_schema}" && "{self.file_exe_deployer}" --build''') # && chcp 65001
 
     def read_mapping_table(self):
         # 读取单字码表(映射表)
@@ -88,6 +95,17 @@ class AutoRime:
                     self.dict_char_code[char] = code
                     self.set_chars_user.add(char)
 
+    def read_mapping_table_pingyin(self):
+        # 读取单字码表(映射表)
+        self.read_mapping_table()
+        # file_base = 'mapping.txt'
+        # file_sup = 'mapping_sup.txt'
+        with open(self.file_mapping_sup, 'r', encoding='utf-8') as fr:
+            for line in fr:
+                char, code, words_str = line.strip().split("\t")
+                self.dict_char_code_duoyin[char] = code
+                self.dict_char_words_duoyin[char] = sorted(words_str.split(","), key=lambda x: len(x), reverse=False)
+
     def process_article(self, fname):
         file_in = os.path.join(self.dir_articles, fname)
         file_pre = os.path.join(self.dir_articles_pre, fname)
@@ -95,8 +113,6 @@ class AutoRime:
         pre_buffer = "" # for file_pre
         line_buffer = "" # for file_out
         out_buffer = "" # for file_out
-        # punc_pat = re.compile(r"[，。《〈«‹》〉»›？；：‘’“”、～！……·（）－—「【〔［」】〕］『〖｛』〗｝]")
-        # punc_pat_en = re.compile(r"[,\-+:;/0123456789'\. ]")
         with open(file_in, 'r', encoding='utf-8') as fr:
             inline_flag = False
             line_out_flag = True # for file_out
@@ -111,12 +127,12 @@ class AutoRime:
                 else:
                     if inline_flag:
                         pre_buffer += "\n"
-                        inline_flag = False
                         # for file_out
-                        if line_out_flag:
+                        if line_out_flag and len(line_buffer) >= self.len_min:
                             out_buffer += (line_buffer+"\n")
                         line_out_flag = True
                         line_buffer = ""
+                        inline_flag = False
                     continue
         with open(file_pre, 'w', encoding='utf-8') as fw:
             fw.write(pre_buffer)
@@ -133,16 +149,64 @@ class AutoRime:
         file_out = os.path.join(self.dir_in, fname)
         text_buffer = ""
         with open(file_in, 'r', encoding='utf-8') as fr:
-            for char in fr.read():
-                if char in self.dict_char_code:
-                    text_buffer += self.dict_char_code[char]
-                elif char == "\n":
+            if not self.pingyin_flg:
+                # 常规形码方案：按字扫描
+                for char in fr.read():
+                    if char in self.dict_char_code:
+                        text_buffer += self.dict_char_code[char]
+                    elif char == "\n":
+                        text_buffer += "1\n"
+                    else:
+                        raise UnicodeError("该字符的编码不存在："+char)
+            else:
+                # 拼音方案：按行再按字扫描
+                for line in fr:
+                    line = line.strip()
+                    for i in range(len(line)):
+                        char = line[i]
+                        if char in self.dict_char_code:
+                            if char not in self.dict_char_code_duoyin:
+                                # 不是多音字
+                                text_buffer += self.dict_char_code[char]
+                            else:
+                                # 是多音字
+                                match_flg = False
+                                for word in self.dict_char_words_duoyin[char]:
+                                    # 1.在短句中查找该(特别读音的)词
+                                    start = line.find(word)
+                                    if start > -1:
+                                        # 2.在句中找到词(可能找到多个)
+                                        parts = line.split(word)
+                                        for j in range(1, len(parts), 1):
+                                            # 3.判断字和词的位置是否匹配
+                                            len_start = len("".join(parts[:j])) + len(word)*(j-1)
+                                            len_end = len_start + len(word)
+                                            if len_start <= i and i < len_end:
+                                                match_flg = True
+                                                code = self.dict_char_code_duoyin[char]
+                                                text_buffer += code
+                                                self.list_matched_duoyin.append((fname, line, word, char, code))
+                                                break
+                                    if match_flg:
+                                        break
+                                        # if len(parts) == 2:
+                                        #     # 逻辑待完善
+                                        #     match_flg = True
+                                        #     text_buffer += self.dict_char_code_duoyin[char]
+                                        #     print(line, char, word)
+                                        #     break
+                                if not match_flg:
+                                    text_buffer += self.dict_char_code[char]
+                        else:
+                            raise UnicodeError("该字符的编码不存在："+char)
                     text_buffer += "1\n"
-                else:
-                    raise UnicodeError("该字符的编码不存在："+char)
         with open(file_out, 'w', encoding='utf-8') as fw:
             fw.write(text_buffer)
             fw.write("\nexit\n")
+        if self.pingyin_flg:
+            with open(self.file_matched_duoyin, 'w', encoding='utf-8') as fa:
+                for t in self.list_matched_duoyin:
+                    fa.write(f"{t[0]}\t{t[1]}\t{t[2]}\t{t[3]}({t[4]})\n")
 
     def simulate(self, fname, is_final: bool=False):
         file_stdin = os.path.join(self.dir_in, fname)
@@ -161,14 +225,13 @@ class AutoRime:
         # && chcp 65001
         cmd_command = f'''cd "{self.dir_schema}" && chcp 65001 && "{self.file_exe_console}" < "{file_stdin}" 2> nul | find "commit:" >> "{file_stdout}"'''
         # os.system(cmd_command)
-        cmd_stdout = os.popen(cmd_command)
+        cmd_stdout = os.popen(cmd_command) # 使用 popen 以方便过滤打印内容
         for line in cmd_stdout:
             if ("code page" not in line) and ("活动代码页" not in line):
                 print(line.rstrip())
         if cmd_stdout.close() is not None:
             raise BaseException("模拟出现异常")
         # 2.收集输出的乱码行
-        # print("正在收集乱码行", fname)
         set_n = set()
         with open(file_stdout, 'r', encoding='utf-8') as fr:
             n = 0
@@ -194,7 +257,6 @@ class AutoRime:
                         n += 1
                         if n in set_n:
                             fa.write(line)
-        # print("模拟完成：", fname)
 
     def get_statistics(self, fname, dict_sup):
         file_in = os.path.join(self.dir_articles_ready, fname)
@@ -287,11 +349,23 @@ class AutoRime:
 
 def main():
     # 0.初始化 Rime (包括部署)
-    ar = AutoRime()
+    print("欢迎使用 AutoRime 模拟跟打程序，请输入以下选项：\n")
+    pingyin_flg = False
+    len_min = 1
+    len_code = 0
+    sel1 = input('[选项1]目标方案是否为拼音类方案（一字多码），回车默认N（Y/N）：')
+    if sel1 and sel1 in ['Y', 'y']:
+        pingyin_flg = True
+    sel2 = input('[选项2]是否只模拟跟打 n 字及以上的短句，回车默认1（整数）：')
+    if sel2 and int(sel2) > 1:
+        len_min = int(sel2)
+    sel3 = input('[选项3]固定模拟跟打的单字码长（适合音形、形音方案），回车默认0表示不固定码长（大于1的整数）：')
+    if sel3 and int(sel3) > 1:
+        len_code = int(sel3)
+    print("进入跟打模拟中……\n")
+    ar = AutoRime(pingyin_flg, len_min, len_code)  # send True if pingyin
 
     # 1.模拟打字
-    # list_fname = ["001_春（朱自清）.txt", "002_爱怕什么（毕淑敏）.txt", ar.fname_sup]
-    # for fname in list_fname:
     for fname in os.listdir(ar.dir_articles):
         if fname.endswith(".txt") and fname != ar.fname_sup:
             ar.process_article(fname)
@@ -306,11 +380,12 @@ def main():
     dict_sup = {}
     if os.path.exists(ar.file_out_sup):
         dict_sup = ar.load_sup_result()
+    if ar.pingyin_flg:
+        print("自动识别的多音字已写入文件：", os.path.split(ar.file_matched_duoyin)[-1])
 
     # 3.统计模拟结果
     print()
     stats_all = [0, 0, 0, 0]
-    # for fname in list_fname:
     for fname in os.listdir(ar.dir_articles):
         if fname.endswith(".txt") and fname != ar.fname_sup:
             stats = ar.get_statistics(fname, dict_sup)
