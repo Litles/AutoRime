@@ -218,9 +218,9 @@ class AutoRime:
             # (sup) 补充退出命令
             with open(file_stdin, 'a', encoding='utf-8') as fa:
                 fa.write("\nexit\n")
-            print("正在模拟跟打：", self.fname_sup+" [程序自动生成]")
+            print("正在模拟跟打：", self.fname_sup+" [程序自动生成]", flush=True)
         else:
-            print("正在模拟跟打：", fname)
+            print("正在模拟跟打：", fname, flush=True)
         # 1.开始模拟
         # && chcp 65001
         cmd_command = f'''cd "{self.dir_schema}" && chcp 65001 && "{self.file_exe_console}" < "{file_stdin}" 2> nul | find "commit:" >> "{file_stdout}"'''
