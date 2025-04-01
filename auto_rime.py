@@ -260,9 +260,24 @@ class AutoRime:
 
     def get_statistics(self, fname, dict_sup):
         file_in = os.path.join(self.dir_articles_ready, fname)
+        file_code = os.path.join(self.dir_in, fname)
         file_out = os.path.join(self.dir_out, fname)
         lines_in = []
         lines_out = []
+        chars_cnt = 0
+        codes_len = 0
+        # 计算码长
+        with open(file_in, 'r', encoding='utf-8') as fr:
+            for line in fr:
+                line = line.strip()
+                if line:
+                    chars_cnt += len(line)
+        with open(file_code, 'r', encoding='utf-8') as fr:
+            for line in fr:
+                line = line.strip()
+                if line and line != "exit":
+                    codes_len += len(line.rstrip("1"))
+        # (统计前准备)读取输入输出行
         with open(file_in, 'r', encoding='utf-8') as fr:
             for line in fr:
                 lines_in.append(line.strip())
@@ -310,7 +325,7 @@ class AutoRime:
             if text_unmatched:
                 with open(os.path.join(self.dir_unmatched, fname), 'w', encoding='utf-8') as fw:
                     fw.write(text_unmatched)
-            return (cnt_line_total, cnt_line_correct, cnt_char_total, cnt_char_correct)
+            return (cnt_line_total, cnt_line_correct, cnt_char_total, cnt_char_correct, chars_cnt, codes_len)
 
     def load_sup_result(self) -> dict:
         dict_result = {}
@@ -340,10 +355,12 @@ class AutoRime:
                 print("\n===== 全部文章 =====")
             ratio_line = round(stats[1] / stats[0] * 100, 2)
             ratio_char = round(stats[3] / stats[2] * 100, 2)
+            avg_code_len = round(stats[5] / stats[4], 2)
             res_line = f"短句总数, 准确数, 完全准确率:\t{stats[0]}, {stats[1]}, {ratio_line}%"
             res_char = f"汉字总数, 准确数, 综合准确率:\t{stats[2]}, {stats[3]}, {ratio_char}%"
-            fa.write(res_line+"\n"+res_char+"\n")
-            print(res_line+"\n"+res_char)
+            res_codelen = f"平均码长：\t{avg_code_len}"
+            fa.write(res_line+"\n"+res_char+"\n"+res_codelen+"\n")
+            print(res_line+"\n"+res_char+"\n"+res_codelen)
         if not fname:
             print("统计结果已写入文件：", os.path.split(self.file_stats)[-1])
 
@@ -385,12 +402,12 @@ def main():
 
     # 3.统计模拟结果
     print()
-    stats_all = [0, 0, 0, 0]
+    stats_all = [0, 0, 0, 0, 0, 0]
     for fname in os.listdir(ar.dir_articles):
         if fname.endswith(".txt") and fname != ar.fname_sup:
             stats = ar.get_statistics(fname, dict_sup)
             ar.output_result(stats, fname)
-            for i in range(4):
+            for i in range(6):
                 stats_all[i] += stats[i]
     ar.output_result(stats_all)
 
