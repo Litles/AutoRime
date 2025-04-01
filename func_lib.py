@@ -91,3 +91,60 @@ def generate_mapping_table_pingyin(dir_dict_yamls, file_base, file_sup, len_code
         for pair, words in dct_pair_words.items():
             fw.write(f"{pair}\t{",".join(words)}\n")
     print("映射表生成完毕.")
+
+def qiefen_trap():
+    file_dzmb = "mapping_table.txt"
+    dict_len2code_chars = defaultdict(list)
+    dict_len3code_chars = defaultdict(list)
+    with open(file_dzmb, 'r', encoding='utf-8') as fr:
+        for line in fr:
+            char, code = line.strip().split("\t")
+            if len(code) == 2:
+                dict_len2code_chars[code].append(char)
+            elif len(code) == 3:
+                dict_len3code_chars[code].append(char)
+            else:
+                print("ERROR: code length not 2 or 3")
+    # print(len(dict_char_len2code)+len(dict_char_len3code))
+    with open('qiefen_23and32.txt', 'w', encoding='utf-8') as fw:
+        for code2,chars2 in dict_len2code_chars.items():
+            for code3,chars3 in dict_len3code_chars.items():
+                left = code2+code3[:1]
+                right = code3[1:]
+                if left in dict_len3code_chars and right in dict_len2code_chars:
+                    chars_left = dict_len3code_chars[left]
+                    chars_right = dict_len2code_chars[right]
+                    fw.write(f"{code2}{code3}\t")
+                    # 23
+                    for cl in chars2:
+                        for cr in chars3:
+                            fw.write(f",{cl}{cr}")
+                    fw.write("\t")
+                    # 32
+                    for cl in chars_left:
+                        for cr in chars_right:
+                            fw.write(f",{cl}{cr}")
+                    fw.write("\n")
+    with open('qiefen_222and33.txt', 'w', encoding='utf-8') as fw:
+        set_len6 = set()
+        for code3a,chars3a in dict_len3code_chars.items():
+            for code3b,chars3b in dict_len3code_chars.items():
+                str_len6 = code3a+code3b
+                if str_len6 not in set_len6:
+                    set_len6.add(code3a+code3b)
+                    lef = str_len6[:2]
+                    mid = str_len6[2:4]
+                    rig = str_len6[4:]
+                    if lef in dict_len2code_chars and mid in dict_len2code_chars and rig in dict_len2code_chars:
+                        fw.write(f"{code3a}{code3b}\t")
+                        # 33
+                        for cl in chars3a:
+                            for cr in chars3b:
+                                fw.write(f",{cl}{cr}")
+                        fw.write("\t")
+                        # 222
+                        for cl in dict_len2code_chars[lef]:
+                            for cm in dict_len2code_chars[mid]:
+                                for cr in dict_len2code_chars[rig]:
+                                    fw.write(f",{cl}{cm}{cr}")
+                        fw.write("\n")
