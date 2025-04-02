@@ -268,6 +268,32 @@ class AutoRime:
             raise BaseException(f"模拟出现异常: {str(e)}")
         except Exception as e:
             raise BaseException(f"模拟过程中出现错误: {str(e)}")
+        # 2.收集输出的乱码行
+        set_n = set()
+        with open(file_stdout, 'r', encoding='utf-8') as fr:
+            n = 0
+            for line in fr:
+                n += 1
+                if "\ufffd" in line:
+                    set_n.add(n)
+        if is_final and set_n:
+            print(f"WARNING: 仍有 {len(set_n)} 个乱行未处理")
+        elif (not is_final) and set_n:
+            file_origin = os.path.join(self.dir_articles_ready, fname)
+            with open(self.file_ready_sup, 'a', encoding='utf-8') as fa:
+                n = 0
+                with open(file_origin, 'r', encoding='utf-8') as fr:
+                    for line in fr:
+                        n += 1
+                        if n in set_n:
+                            fa.write(line)
+            with open(self.file_in_sup, 'a', encoding='utf-8') as fa:
+                n = 0
+                with open(file_stdin, 'r', encoding='utf-8') as fr:
+                    for line in fr:
+                        n += 1
+                        if n in set_n:
+                            fa.write(line)
 
     def get_statistics(self, fname, dict_sup):
         file_in = os.path.join(self.dir_articles_ready, fname)
