@@ -3,11 +3,12 @@
 # @Date    : 2025-03-27 12:42:11
 # @Author  : Litles (litlesme@gmail.com)
 # @Link    : https://github.com/Litles
-# @Version : 1.1
+# @Version : 1.2
 
 import os
 import sys
 import traceback
+import subprocess
 from time import sleep, perf_counter
 from func_lib import get_charset, generate_mapping_table_pingyin
 
@@ -23,9 +24,26 @@ class AutoRime:
             self.dir_bundle = os.getcwd()
 
         # 1.Rime 相关程序的路径
-        self.dir_librime = os.path.join(self.dir_bundle, 'librime_x86')
-        self.file_exe_deployer = os.path.join(os.path.join(self.dir_librime, 'bin'), 'rime_deployer.exe')
-        self.file_exe_console = os.path.join(os.path.join(self.dir_librime, 'bin'), 'rime_api_console.exe')
+        if sys.platform == 'win32':
+            self.dir_librime = os.path.join(self.dir_bundle, 'librime_x86')
+            self.file_exe_deployer = os.path.join(os.path.join(self.dir_librime, 'bin'), 'rime_deployer.exe')
+            self.file_exe_console = os.path.join(os.path.join(self.dir_librime, 'bin'), 'rime_api_console.exe')
+        else:
+            # Mac/Linux 版本
+            self.dir_librime = os.path.join(self.dir_bundle, 'librime_x86')
+            self.file_exe_deployer = os.path.join(os.path.join(self.dir_librime, 'bin'), 'rime_deployer')
+            self.file_exe_console = os.path.join(os.path.join(self.dir_librime, 'bin'), 'rime_api_console')
+            
+            # 检查可执行文件是否存在
+            if not os.path.exists(self.file_exe_deployer):
+                raise FileNotFoundError(f"找不到 Rime 部署程序: {self.file_exe_deployer}")
+            if not os.path.exists(self.file_exe_console):
+                raise FileNotFoundError(f"找不到 Rime 控制台程序: {self.file_exe_console}")
+            
+            # 确保可执行文件有执行权限
+            os.chmod(self.file_exe_deployer, 0o755)
+            os.chmod(self.file_exe_console, 0o755)
+
         self.dir_schema = os.path.join(self.dir_bundle, 'Rime')
 
         # 2.AutoRime 相关路径
@@ -83,7 +101,13 @@ class AutoRime:
             generate_mapping_table_pingyin(self.dir_dict_yamls, self.file_mapping, self.file_mapping_sup, self.len_code)
             self.read_mapping_table_pingyin()
         # 部署 Rime
-        os.system(f'''cd "{self.dir_schema}" && "{self.file_exe_deployer}" --build''') # && chcp 65001
+        try:
+            if sys.platform == 'win32':
+                subprocess.run(f'''cd "{self.dir_schema}" && "{self.file_exe_deployer}" --build''', shell=True, check=True)
+            else:
+                subprocess.run(['cd', self.dir_schema, '&&', self.file_exe_deployer, '--build'], shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            raise BaseException(f"Rime 部署失败: {str(e)}")
 
     def read_mapping_table(self):
         # 读取单字码表(映射表)
@@ -222,41 +246,28 @@ class AutoRime:
         else:
             print("正在模拟跟打：", fname, flush=True)
         # 1.开始模拟
-        # && chcp 65001
-        cmd_command = f'''cd "{self.dir_schema}" && chcp 65001 && "{self.file_exe_console}" < "{file_stdin}" 2> nul | find "commit:" >> "{file_stdout}"'''
-        # os.system(cmd_command)
-        cmd_stdout = os.popen(cmd_command) # 使用 popen 以方便过滤打印内容
-        for line in cmd_stdout:
-            if ("code page" not in line) and ("活动代码页" not in line):
-                print(line.rstrip())
-        if cmd_stdout.close() is not None:
-            raise BaseException("模拟出现异常")
-        # 2.收集输出的乱码行
-        set_n = set()
-        with open(file_stdout, 'r', encoding='utf-8') as fr:
-            n = 0
-            for line in fr:
-                n += 1
-                if "\ufffd" in line:
-                    set_n.add(n)
-        if is_final and set_n:
-            print(f"WARNING: 仍有 {len(set_n)} 个乱行未处理")
-        elif (not is_final) and set_n:
-            file_origin = os.path.join(self.dir_articles_ready, fname)
-            with open(self.file_ready_sup, 'a', encoding='utf-8') as fa:
-                n = 0
-                with open(file_origin, 'r', encoding='utf-8') as fr:
-                    for line in fr:
-                        n += 1
-                        if n in set_n:
-                            fa.write(line)
-            with open(self.file_in_sup, 'a', encoding='utf-8') as fa:
-                n = 0
-                with open(file_stdin, 'r', encoding='utf-8') as fr:
-                    for line in fr:
-                        n += 1
-                        if n in set_n:
-                            fa.write(line)
+        try:
+            if sys.platform == 'win32':
+                cmd_command = f'''cd "{self.dir_schema}" && chcp 65001 && "{self.file_exe_console}" < "{file_stdin}" 2> nul | find "commit:" >> "{file_stdout}"'''
+            else:
+                # Mac/Linux 版本
+                cmd_command = f'''cd "{self.dir_schema}" && "{self.file_exe_console}" < "{file_stdin}" 2>/dev/null | grep "commit:" >> "{file_stdout}"'''
+            
+            process = subprocess.Popen(cmd_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            stdout, stderr = process.communicate()
+            
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, cmd_command)
+            
+            # 过滤并打印输出
+            for line in stdout.splitlines():
+                if ("code page" not in line) and ("活动代码页" not in line):
+                    print(line.rstrip())
+                    
+        except subprocess.CalledProcessError as e:
+            raise BaseException(f"模拟出现异常: {str(e)}")
+        except Exception as e:
+            raise BaseException(f"模拟过程中出现错误: {str(e)}")
 
     def get_statistics(self, fname, dict_sup):
         file_in = os.path.join(self.dir_articles_ready, fname)
