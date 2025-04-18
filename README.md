@@ -1,6 +1,8 @@
 # AutoRime
 Rime 打字模拟和数据统计
 
+<img src="https://github.com/Litles/AutoRime/blob/main/images/cli.png" width="750"/>
+
 ## 使用方法
 
 1. 将需要测试的某方案的相关文件（`dict.yaml`、`schema.yaml`等）拷贝到 Rime 文件夹内；

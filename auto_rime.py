@@ -11,6 +11,7 @@ import traceback
 import subprocess
 from time import sleep, perf_counter
 from func_lib import get_charset, generate_mapping_table_pingyin
+from tqdm import tqdm
 
 class AutoRime:
     def __init__(self, pingyin_flg: bool=False, len_min: int=1, len_code: int=0):
@@ -245,6 +246,12 @@ class AutoRime:
             print("正在模拟跟打：", self.fname_sup+" [程序自动生成]", flush=True)
         else:
             print("正在模拟跟打：", fname, flush=True)
+        
+        # 计算总行数
+        total_lines = 0
+        with open(file_stdin, 'r', encoding='utf-8') as fr:
+            total_lines = sum(1 for line in fr if line.strip() and line.strip() != "exit")
+        
         # 1.开始模拟
         try:
             if sys.platform == 'win32':
@@ -254,6 +261,22 @@ class AutoRime:
                 cmd_command = f'''cd "{self.dir_schema}" && "{self.file_exe_console}" < "{file_stdin}" 2>/dev/null | grep "commit:" >> "{file_stdout}"'''
             
             process = subprocess.Popen(cmd_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            
+            # 使用tqdm显示进度
+            with tqdm(total=total_lines, desc="模拟进度", unit="行") as pbar:
+                while True:
+                    if os.path.exists(file_stdout):
+                        try:
+                            with open(file_stdout, 'r', encoding='utf-8', errors='ignore') as fr:
+                                current_lines = sum(1 for line in fr if line.strip().startswith("commit:"))
+                                pbar.update(current_lines - pbar.n)
+                        except Exception:
+                            # 如果文件读取失败，继续等待
+                            pass
+                    if process.poll() is not None:
+                        break
+                    sleep(0.1)
+            
             stdout, stderr = process.communicate()
             
             if process.returncode != 0:
