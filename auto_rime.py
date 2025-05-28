@@ -11,7 +11,10 @@ import traceback
 import subprocess
 from time import sleep, perf_counter
 from func_lib import get_charset, generate_mapping_table_pingyin
+from func_lib import get_dkp, get_hu_ji, get_xkp, get_xzgr
 from tqdm import tqdm
+
+import func_lib
 
 class AutoRime:
     def __init__(self, pingyin_flg: bool=False, len_min: int=1, len_code: int=0):
@@ -424,6 +427,79 @@ class AutoRime:
         if not fname:
             print("统计结果已写入文件：", os.path.split(self.file_stats)[-1])
 
+    def get_statistics_perf(self, fname):
+        """ 统计: 总字数，总码长，总互击数，总小指干扰，总大跨排，总小跨排 """
+        file_in = os.path.join(self.dir_articles_ready, fname)
+        file_code = os.path.join(self.dir_in, fname)
+        chars_cnt = 0
+        codes_len = 0
+        huji_cnt = 0
+        ganrao_cnt = 0
+        dkuapai_cnt = 0
+        xkuapai_cnt = 0
+        # 计算码长
+        with open(file_in, 'r', encoding='utf-8') as fr:
+            # 统计字数
+            for line in fr:
+                line = line.strip()
+                if line:
+                    chars_cnt += len(line)
+        with open(file_code, 'r', encoding='utf-8') as fr:
+            # 统计其他
+            for line in fr:
+                line = line.strip()
+                if line and line != "exit":
+                    codes_len += len(line.rstrip("1"))
+                    huji_cnt += get_hu_ji(line)
+                    ganrao_cnt += get_xzgr(line)
+                    dkuapai_cnt += get_dkp(line)
+                    xkuapai_cnt += get_xkp(line)
+        return (huji_cnt, ganrao_cnt, dkuapai_cnt, xkuapai_cnt, chars_cnt, codes_len)
+
+    def output_result_perf(self, stats, fname: str=""):
+        with open(self.file_stats, 'a', encoding='utf-8') as fa:
+            if fname:
+                fa.write(f"--- {fname} ---\n")
+                print(f"--- {fname} ---")
+            else:
+                fa.write("\n===== 全部文章 =====\n")
+                print("\n===== 全部文章 =====")
+            ratio_char_huji, ratio_code_huji = round(stats[0] / stats[4] * 100, 1), round(stats[0] / stats[5] * 100, 1)
+            ratio_char_ganrao, ratio_code_ganrao = round(stats[1] / stats[4] * 100, 1), round(stats[1] / stats[5] * 100, 1)
+            ratio_char_dkuapai, ratio_code_dkuapai = round(stats[2] / stats[4] * 100, 1), round(stats[2] / stats[5] * 100, 1)
+            ratio_char_xkuapai, ratio_code_xkuapai = round(stats[3] / stats[4] * 100, 1), round(stats[3] / stats[5] * 100, 1)
+            avg_code_len = round(stats[5] / stats[4], 2)
+            res_char = f"【字均】互击率, 小指干扰率, 大跨排率, 小跨排率:\t{ratio_char_huji}%, {ratio_char_ganrao}%, {ratio_char_dkuapai}%, {ratio_char_xkuapai}%"
+            res_code = f"【键均】互击率, 小指干扰率, 大跨排率, 小跨排率:\t{ratio_code_huji}%, {ratio_code_ganrao}%, {ratio_code_dkuapai}%, {ratio_code_xkuapai}%"
+            res_codelen = f"总字数，平均码长：\t{stats[4]}, {avg_code_len}"
+            fa.write(res_char+"\n"+res_code+"\n"+res_codelen+"\n")
+            print(res_char+"\n"+res_code+"\n"+res_codelen)
+        if not fname:
+            print("统计结果已写入文件：", os.path.split(self.file_stats)[-1])
+
+def main_perf():
+    # 0.初始化 Rime (包括部署)
+    pingyin_flg = False
+    len_min = 1
+    len_code = 0
+    ar = AutoRime(pingyin_flg, len_min, len_code)  # send True if pingyin
+    print("开始计算手感指标……")
+    # 1.生成编码
+    for fname in os.listdir(ar.dir_articles):
+        if fname.endswith(".txt") and fname != ar.fname_sup:
+            ar.process_article(fname)
+            ar.generate_stdin_file(fname)
+    # 2.统计并输出结果
+    print()
+    stats_all = [0, 0, 0, 0, 0, 0]
+    for fname in os.listdir(ar.dir_articles):
+        if fname.endswith(".txt") and fname != ar.fname_sup:
+            stats = ar.get_statistics_perf(fname)
+            ar.output_result_perf(stats, fname)
+            for i in range(6):
+                stats_all[i] += stats[i]
+    ar.output_result_perf(stats_all)
+
 def main():
     # 0.初始化 Rime (包括部署)
     print("欢迎使用 AutoRime 模拟跟打程序，请输入以下选项：\n")
@@ -471,10 +547,12 @@ def main():
                 stats_all[i] += stats[i]
     ar.output_result(stats_all)
 
+
 if __name__ == '__main__':
     try:
         start = perf_counter()
-        main()
+        # main()
+        main_perf()
         print("\nRuntime:", perf_counter() - start)
     except:
         print(traceback.format_exc())

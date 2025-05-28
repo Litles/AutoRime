@@ -148,3 +148,53 @@ def qiefen_trap():
                                 for cr in dict_len2code_chars[rig]:
                                     fw.write(f",{cl}{cm}{cr}")
                         fw.write("\n")
+
+
+
+tz = {'qaz', 'wsx', 'edc', 'rfvtgb', 'yhnujm', 'ik', 'ol', 'p'}
+xiao_kp = {'qa', 'ws', 'ed', 'rf', 'tg', 'rg', 'tf', 'yh', 'uj', 
+           'yj', 'uh', 'ik', 'ol', 'az', 'sx', 'dc', 'fv', 'gb',
+           'fb', 'gv', 'hn', 'jm', 'jn', 'hm', 'fg', 'rt', 'vb',
+           'yu', 'hj', 'nm'}
+da_kp = {'qz', 'wx', 'ec', 'rv', 'tv', 'rb', 'tb', 'yn', 'ym', 'un', 'um'}
+gr = {'qw', 'qs', 'qx', 'aw', 'as', 'ax', 'zw', 'zs', 'zx', 'op', 'lp'}
+kp = da_kp.union(xiao_kp)
+left_key = set('qwertasdfgzxcvb')
+right_key = set('yuiophjklnm;')
+
+def get_hu_ji(code):
+    """ 计算左右互击 """
+    res = 0
+    if len(code) >= 2:
+        for i in range(len(code)-1):
+            if code[i] == '_' or code[i+1] == '_':
+                res += 1
+            elif (code[i] in left_key and code[i+1] in right_key) \
+                or (code[i] in right_key and code[i+1] in left_key):
+                res += 1
+    return res
+
+def get_dkp(code):
+    """ 计算同指大跨排 """
+    res = 0
+    for i in range(len(code)-1):
+        if (code[i] + code[i+1] in da_kp) or (code[i+1] + code[i] in da_kp):
+            res += 1
+    return res
+
+def get_xkp(code):
+    """ 计算同指小跨排 """
+    res = 0
+    for i in range(len(code)-1):
+        if (code[i] + code[i+1] in xiao_kp) or (code[i+1] + code[i] in xiao_kp):
+            res += 1
+    return res
+
+def get_xzgr(code):
+    """ 计算小指干扰 """
+    res = 0
+    if len(code) >= 2:
+        for i in range(len(code)-1):
+            if (code[i:i+2] in gr) or (code[i+1::-1][:2] in gr):
+                res += 1
+    return res
